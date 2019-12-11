@@ -118,6 +118,9 @@
                     <li class="nav-item {{ if eq .Active "vis"}}active{{end}}">
                         <a class="nav-link" href="/vis"><i class="fas fa-project-diagram"></i> Block Viz</a>
                     </li>
+                    <li class="nav-item {{ if eq .Active "dashboard"}}active{{end}}">
+                        <a class="nav-link" href="/dashboard"><i class="fas fa-chart-line"></i> Dashboard</a>
+                    </li>
                 </ul>
                 <form class="form-inline ml-auto" action="/search" method="POST">
                     <input class="form-control mr-2 typeahead" name="search" type="search"

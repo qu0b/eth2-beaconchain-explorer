@@ -285,3 +285,11 @@ type SearchAheadValidatorsResult []struct {
 	Index  string `db:"index" json:"index,omitempty"`
 	Pubkey string `db:"pubkey" json:"pubkey,omitempty"`
 }
+
+type DashboardPageData struct {
+	Title        string
+	Validators   []*ValidatorsPageDataValidators
+	ActiveCount  uint64
+	PendingCount uint64
+	EjectedCount uint64
+}
