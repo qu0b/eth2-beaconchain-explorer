@@ -287,12 +287,14 @@ type SearchAheadValidatorsResult []struct {
 }
 
 type DashboardPageData struct {
-	Title              string
-	Validators         []*ValidatorsPageDataValidators
-	ActiveCount        uint64
-	PendingCount       uint64
-	EjectedCount       uint64
-	DailyProposalCount []DailyProposalCount
+	Title                            string
+	Validators                       []*ValidatorsPageDataValidators
+	ActiveCount                      uint64
+	PendingCount                     uint64
+	EjectedCount                     uint64
+	DailyProposalCount               []DailyProposalCount
+	BalanceHistoryChartData          [][]float64
+	EffectiveBalanceHistoryChartData [][]float64
 }
 
 type GenericChartData struct {
