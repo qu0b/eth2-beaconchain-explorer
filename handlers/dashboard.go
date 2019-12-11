@@ -57,7 +57,7 @@ func Dashboard(w http.ResponseWriter, r *http.Request) {
 	filterArr, err := parseValidatorsFromQueryString(qValidators)
 	if err != nil {
 		logger.WithError(err).Error("Failed parsing validators from query string")
-		http.Error(w, "Not found", 404)
+		http.Error(w, err.Error(), 404)
 		return
 	}
 	filter := pq.Array(filterArr)
@@ -118,7 +118,7 @@ func Dashboard(w http.ResponseWriter, r *http.Request) {
 					Missed:   proposals[i].Count,
 				})
 			} else {
-				logger.Error("Error parsing Daily Proposed Blocks unkown status: %v", err)
+				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
 			}
 		} else {
 			if proposals[i].Day == proposals[i+1].Day {
@@ -141,7 +141,7 @@ func Dashboard(w http.ResponseWriter, r *http.Request) {
 					Missed:   proposals[i].Count,
 				})
 			} else {
-				logger.Error("Error parsing Daily Proposed Blocks unkown status: %v", err)
+				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
 			}
 		}
 	}
@@ -198,7 +198,7 @@ func DashboardValidatorsDataPending(w http.ResponseWriter, r *http.Request) {
 	filterArr, err := parseValidatorsFromQueryString(qValidators)
 	if err != nil {
 		logger.WithError(err).Error("Failed parsing validators from query string")
-		http.Error(w, "Not found", 404)
+		http.Error(w, err.Error(), 404)
 		return
 	}
 	filter := pq.Array(filterArr)
@@ -298,7 +298,7 @@ func DashboardValidatorsDataActive(w http.ResponseWriter, r *http.Request) {
 	filterArr, err := parseValidatorsFromQueryString(qValidators)
 	if err != nil {
 		logger.WithError(err).Error("Failed parsing validators from query string")
-		http.Error(w, "Not found", 404)
+		http.Error(w, err.Error(), 404)
 		return
 	}
 	filter := pq.Array(filterArr)
@@ -406,7 +406,7 @@ func DashboardValidatorsDataEjected(w http.ResponseWriter, r *http.Request) {
 	filterArr, err := parseValidatorsFromQueryString(qValidators)
 	if err != nil {
 		logger.WithError(err).Error("Failed parsing validators from query string")
-		http.Error(w, "Not found", 404)
+		http.Error(w, err.Error(), 404)
 		return
 	}
 	filter := pq.Array(filterArr)
