@@ -93,6 +93,8 @@
       ]
     })
 
+    var validators = getValidators()
+
     var bhValidators = new Bloodhound({
       datumTokenizer: Bloodhound.tokenizers.whitespace,
       queryTokenizer: Bloodhound.tokenizers.whitespace,
@@ -132,95 +134,126 @@
     })
 
     $('.typeahead-dashboard').on('input', function() {
-      $('.tt-suggestion')
-        .first()
-        .addClass('tt-cursor')
+      $('.tt-suggestion').first().addClass('tt-cursor')
     })
 
     $('.typeahead-dashboard').on('typeahead:select', function(ev, sug) {
       addValidator(sug.index)
+      $('.typeahead-dashboard').typeahead('val', '')
     })
 
-    $('#validator-form').submit(function(event) {
-      event.preventDefault()
-      var search = $('#validator-form input').val()
-      addValidator(search)
-    })
     $('#pending').on('click', 'button', function() {
-      var data = pendingTable.row($(this).parents('tr')).data()
+      var data = pendingTable.row( $(this).parents('tr') ).data()
       removeValidator(data[1])
     })
     $('#active').on('click', 'button', function() {
-      var data = activeTable.row($(this).parents('tr')).data()
+      var data = activeTable.row( $(this).parents('tr') ).data()
       removeValidator(data[1])
     })
     $('#ejected').on('click', 'button', function() {
-      var data = ejectedTable.row($(this).parents('tr')).data()
+      var data = ejectedTable.row( $(this).parents('tr') ).data()
       removeValidator(data[1])
     })
-  })
-  var validators = getValidators()
+    $('#selected-validators').on('click', '.fa-times-circle', function() {
+      removeValidator(this.parentElement.dataset.validatorIndex)
+    })
+    // $('#validator-form').submit(function(event) {
+    //   event.preventDefault()
+    //   var search = $('#validator-form input').val()
+    //   addValidator(search)
+    // })
 
-  function getValidators() {
-    var usp = new URLSearchParams(window.location.search)
-    var validatorsStr = usp.get('validators')
-    var validators = validatorsStr
-    if (validators && validators.length) {
-      validators = validatorsStr.split(',')
-    } else {
-      validators = []
-    }
-    return validators
-  }
+    renderSelectedValidators()
 
-  function getValidators() {
-    var usp = new URLSearchParams(window.location.search)
-    var validatorsStr = usp.get('validators')
-    if (!validatorsStr) {
-      return []
+    function renderSelectedValidators() {
+      var elHolder = document.getElementById('selected-validators')
+      $('#selected-validators .item').remove()
+      var elsItems = []
+      for (var i=0; i<validators.length; i++) {
+        var v = validators[i]
+        var elItem = document.createElement('li')
+        elItem.classList = 'item badge'
+        elItem.dataset.validatorIndex = v
+        elItem.innerHTML = v+' <i class="fas fa-times-circle"></i>'
+        elsItems.push(elItem)
+      }
+      elHolder.prepend(...elsItems)
+      
     }
-    var validators = validatorsStr.split(',')
-    return validators
-  }
 
-  function addValidator(index) {
-    if (validators.length >= 100) {
-      alert('Too much validators, you can not add more than 100 validators to your dashboard!')
-      return
+    function getValidators() {
+      var usp = new URLSearchParams(window.location.search)
+      var validatorsStr = usp.get('validators')
+      if (!validatorsStr) {
+        return []
+      }
+      var validators = validatorsStr.split(',')
+      return validators
     }
-    for (var i = 0; i < validators.length; i++) {
-      if (validators[i] === index) return
-    }
-    validators.push(index)
-    validators.sort(sortValidators)
-    window.location.search = '?validators=' + validators.join(',')
-  }
 
-  function removeValidator(index) {
-    for (var i = 0; i < validators.length; i++) {
-      if (validators[i] === index) {
-        validators.splice(i, 1)
-        validators.sort(sortValidators)
-        window.location.search = '?validators=' + validators.join(',')
+    function addValidator(index) {
+      if (validators.length >= 100) {
+        alert('Too much validators, you can not add more than 100 validators to your dashboard!')
         return
       }
+      for (var i = 0; i < validators.length; i++) {
+        if (validators[i] === index) return
+      }
+      validators.push(index)
+      validators.sort(sortValidators)
+      renderSelectedValidators()
+      var qryStr = '?validators=' + validators.join(',')
+      var newUrl = window.location.pathname + qryStr
+      window.history.pushState(null, "Dashboard", newUrl)
+      pendingTable.ajax.url('/dashboard/data/pending' + qryStr)
+      activeTable.ajax.url('/dashboard/data/active' + qryStr)
+      ejectedTable.ajax.url('/dashboard/data/ejected' + qryStr)
+      pendingTable.ajax.reload()
+      activeTable.ajax.reload()
+      ejectedTable.ajax.reload()
     }
-  }
 
-  function sortValidators(a, b) {
-    var ai = parseInt(a)
-    var bi = parseInt(b)
-    return ai - bi
-  }
-
-  function addValidator(index) {
-    for (var i = 0; i < validators.length; i++) {
-      if (validators[i] === index) return
+    function removeValidator(index) {
+      for (var i = 0; i < validators.length; i++) {
+        if (validators[i] === index) {
+          validators.splice(i, 1)
+          validators.sort(sortValidators)
+          // window.location.search = '?validators=' + validators.join(',')
+          renderSelectedValidators()
+          var qryStr = '?validators=' + validators.join(',')
+          var newUrl = window.location.pathname + qryStr
+          window.history.pushState(null, "Dashboard", newUrl)
+          pendingTable.ajax.url('/dashboard/data/pending' + qryStr)
+          activeTable.ajax.url('/dashboard/data/active' + qryStr)
+          ejectedTable.ajax.url('/dashboard/data/ejected' + qryStr)
+          pendingTable.ajax.reload()
+          activeTable.ajax.reload()
+          ejectedTable.ajax.reload()
+          return
+        }
+      }
     }
-    validators.push(index)
-    validators.sort()
-    window.location.search = '?validators=' + validators.join(',')
-  }
+
+    function sortValidators(a,b) {
+      var ai = parseInt(a)
+      var bi = parseInt(b)
+      return ai-bi
+    }
+
+    window.onpopstate = function(event) {
+      validators = getValidators()
+      renderSelectedValidators()
+      var qryStr = '?validators=' + validators.join(',')
+      var newUrl = window.location.pathname + qryStr
+      window.history.pushState(null, "Dashboard", newUrl)
+      pendingTable.ajax.url('/dashboard/data/pending' + qryStr)
+      activeTable.ajax.url('/dashboard/data/active' + qryStr)
+      ejectedTable.ajax.url('/dashboard/data/ejected' + qryStr)
+      pendingTable.ajax.reload()
+      activeTable.ajax.reload()
+      ejectedTable.ajax.reload()
+    }
+  })
 </script>
 <script src="https://code.highcharts.com/stock/highstock.js"></script>
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
@@ -566,6 +599,19 @@
 </script>
 {{end}} {{ define "css"}}
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs4/dt-1.10.20/datatables.min.css" />
+<style>
+ul.multiselect li.input { 
+  list-style: none;
+  float: left;
+  /*border: 1px solid black;*/
+}
+ul.multiselect li.item { 
+  list-style: none;
+  float: left;
+  border: 1px solid black;
+  margin: 2px;
+}
+</style>
 {{end}} {{ define "content"}}
 <h1 class="mt-4 text-center">Validator Dashboard</h1>
 <h5 class="text-center">Found {{.PendingCount}} pending, {{.ActiveCount}} active and {{.EjectedCount}} ejected validators</h5>
@@ -585,11 +631,20 @@
     <h1 style="color:red">No Active Validators</h1>
     <p>Add a validator by searching for the index below</p>
     {{end}}
+    <!--
     <form id="validator-form" class="form-inline ml-auto">
-      <input class="form-control mr-2 typeahead-dashboard" name="add-validator" type="search" placeholder="Add Validator" aria-label="Search" />
+      <ul id="selected-validators" class="multiselect">
+        <li class="input"><input class="typeahead-dashboard" type="search" placeholder="Add Validator" aria-label="Search" /></li>
+      </ul>
       <button type="submit" class="btn btn-primary add-validator-to-dashboard"><span class="fas fa-plus"></span></button>
     </form>
+    -->
     {{if .BalanceHistoryChartData}}
+    <div class="row border-bottom p-3">
+      <ul id="selected-validators" class="multiselect">
+        <li class="input"><input class="typeahead-dashboard" type="search" placeholder="Add Validator" aria-label="Search" /></li>
+      </ul>
+    </div>
     <div class="row border-bottom p-3">
       <div class="col-md-12">
         <div id="balancechart" height="200px"></div>
