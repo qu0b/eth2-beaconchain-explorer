@@ -319,9 +319,3 @@ type GenericChartDataSeries struct {
 	Name string      `json:"name"`
 	Data [][]float64 `json:"data"`
 }
-
-type DashboardValidatorBalanceHistory struct {
-	Epoch          uint64  `db:"epoch"`
-	Balance        uint64  `db:"balance"`
-	ValidatorCount float64 `db:"validatorcount"`
-}
