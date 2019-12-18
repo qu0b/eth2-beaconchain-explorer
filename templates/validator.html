@@ -37,7 +37,7 @@
                         }
                     }
                 ]
-            })
+            });
             $('#attestations').DataTable({
                 processing: true,
                 serverSide: true,
@@ -96,39 +96,17 @@
                     }
                 },
                 labels: {
-                    formatter: function () {
-                        return this.value.toFixed(0);
-                    },
                     style: {
                         color: 'black'
                     }
                 },
                 opposite: false
-            }, {
-                title: {
-                    text: 'Effective Balance [ETH]',
-                    style: {
-                        color: '#26232780',
-                        'font-size': '0.8rem'
-                    }
-                },
-                labels: {
-                    formatter: function () {
-                        return this.value.toFixed(0);
-                    },
-                    style: {
-                        color: 'black'
-                    }
-                },
-                opposite: true
             }],
             series: [{
                 name: "Balance",
-                yAxis: 0,
                 data: {{.BalanceHistoryChartData}}
             }, {
                 name: "Effective Balance",
-                yAxis: 1,
                 step: true,
                 data: {{.EffectiveBalanceHistoryChartData}}
             }],
@@ -210,10 +188,13 @@
             }
         });
     </script>
+    {{if .DailyProposalCount}}
     <script>
-        var data = {{.DailyProposalCount}}
-        var proposed = data.map(d => [d.Day * 1000, d.Proposed])
-        var missed = data.map(d => [d.Day * 1000, d.Missed])
+        var data = {{.DailyProposalCount}};
+        var proposed = data.map(d => [d.Day * 1000, d.Proposed]);
+        var missed = data.map(d => [d.Day * 1000, d.Missed]);
+        var orphaned = data.map(d => [d.Day * 1000, d.Orphaned]);
+
         Highcharts.stockChart('proposedChart', {
             exporting: {
                 scale: 1
@@ -243,7 +224,7 @@
                 tickColor: '#e5e1e1',
                 labels: {
                     style: {
-                        color: '#26232780'
+                        color: 'black'
                     }
                 },
                 range: 7 * 24 * 3600 * 1000
@@ -259,7 +240,7 @@
                     },
                     labels: {
                         style: {
-                            color: '#26232780'
+                            color: 'black'
                         }
                     },
                     gridLineColor: '#e5e1e1',
@@ -301,6 +282,10 @@
                 {
                     name: 'Missed',
                     data: missed
+                },
+                {
+                    name: 'Orphaned',
+                    data: orphaned
                 }
             ],
             rangeSelector: {
@@ -332,7 +317,6 @@
                 trackBackgroundColor: '#f5f3f3',
                 trackBorderColor: '#e5e1e180'
             },
-            colors: ['#378ef0a0', '#fb8c13'],
             responsive: {
                 rules: [
                     {
@@ -361,6 +345,7 @@
             }
         })
     </script>
+    {{end}}
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.4/clipboard.min.js"></script>
     <script type="text/javascript">

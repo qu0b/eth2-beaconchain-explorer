@@ -37,6 +37,7 @@ type IndexPageData struct {
 	Blocks                    []*IndexPageDataBlocks `json:"blocks"`
 	StakedEtherChartData      [][]float64            `json:"staked_ether_chart_data"`
 	ActiveValidatorsChartData [][]float64            `json:"active_validators_chart_data"`
+	Subtitle                  template.HTML          `json:"-"`
 }
 
 type IndexPageDataBlocks struct {
@@ -117,6 +118,7 @@ type DailyProposalCount struct {
 	Day      int64
 	Proposed uint
 	Missed   uint
+	Orphaned uint
 }
 
 type ValidatorBalanceHistory struct {
