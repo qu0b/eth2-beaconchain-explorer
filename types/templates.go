@@ -83,7 +83,8 @@ type ValidatorsPageDataValidators struct {
 	ActivationEligibilityEpoch uint64 `db:"activationeligibilityepoch"`
 	ActivationEpoch            uint64 `db:"activationepoch"`
 	ExitEpoch                  uint64 `db:"exitepoch"`
-	Status                     string
+	LastAttested               *uint64
+	LastProposed               *uint64
 }
 
 type ValidatorPageData struct {
@@ -317,4 +318,10 @@ type GenericChartData struct {
 type GenericChartDataSeries struct {
 	Name string      `json:"name"`
 	Data [][]float64 `json:"data"`
+}
+
+type DashboardValidatorBalanceHistory struct {
+	Epoch          uint64  `db:"epoch"`
+	Balance        uint64  `db:"balance"`
+	ValidatorCount float64 `db:"validatorcount"`
 }

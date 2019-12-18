@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sync"
 
 	"strconv"
 	"strings"
@@ -17,7 +18,6 @@ import (
 )
 
 var dashboardTemplate = template.Must(template.New("dashboard").ParseFiles("templates/layout.html", "templates/dashboard.html"))
-var dashboardNotFoundTemplate = template.Must(template.New("dashboardnotfound").ParseFiles("templates/layout.html", "templates/dashboardnotfound.html"))
 
 func parseValidatorsFromQueryString(str string) ([]uint64, error) {
 	if str == "" {
@@ -52,129 +52,7 @@ func parseValidatorsFromQueryString(str string) ([]uint64, error) {
 }
 
 func Dashboard(w http.ResponseWriter, r *http.Request) {
-	dashboardTemplate = template.Must(template.New("dashboard").ParseFiles("templates/layout.html", "templates/dashboard.html"))
 	w.Header().Set("Content-Type", "text/html")
-
-	q := r.URL.Query()
-	qValidators := q.Get("validators")
-
-	filterArr, err := parseValidatorsFromQueryString(qValidators)
-	if err != nil {
-		logger.WithError(err).Error("Failed parsing validators from query string")
-		http.Error(w, err.Error(), 404)
-		return
-	}
-	filter := pq.Array(filterArr)
-	dashboardPageData := types.DashboardPageData{}
-	dashboardPageData.Title = "Hello, World"
-
-	var validators []*types.ValidatorsPageDataValidators
-
-	err = db.DB.Select(&validators, `SELECT 
-	epoch, 
-	activationepoch, 
-	exitepoch 
-	FROM validator_set 
-	WHERE epoch = $1 and validatorindex = ANY($2)
-	ORDER BY validatorindex`, services.LatestEpoch(), filter)
-
-	if err != nil {
-		logger.Printf("Error retrieving validators data: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-
-	for _, validator := range validators {
-		if validator.Epoch > validator.ExitEpoch {
-			dashboardPageData.EjectedCount++
-		} else if validator.Epoch < validator.ActivationEpoch {
-			dashboardPageData.PendingCount++
-		} else {
-			dashboardPageData.ActiveCount++
-		}
-	}
-
-	proposals := []struct {
-		Day    uint64
-		Status uint64
-		Count  uint
-	}{}
-
-	err = db.DB.Select(&proposals, "select slot / 7200 as day, status, count(*) FROM blocks WHERE proposer = ANY($1) group by day, status order by day;", filter)
-	if err != nil {
-		logger.Error("Error retrieving Daily Proposed Blocks blocks count: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-
-	for i := 0; i < len(proposals); i++ {
-		if i == len(proposals)-1 {
-			if proposals[i].Status == 1 {
-				dashboardPageData.DailyProposalCount = append(dashboardPageData.DailyProposalCount, types.DailyProposalCount{
-					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
-					Proposed: proposals[i].Count,
-					Missed:   0,
-				})
-			} else if proposals[i].Status == 2 {
-				dashboardPageData.DailyProposalCount = append(dashboardPageData.DailyProposalCount, types.DailyProposalCount{
-					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
-					Proposed: 0,
-					Missed:   proposals[i].Count,
-				})
-			} else {
-				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
-			}
-		} else {
-			if proposals[i].Day == proposals[i+1].Day {
-				dashboardPageData.DailyProposalCount = append(dashboardPageData.DailyProposalCount, types.DailyProposalCount{
-					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
-					Proposed: proposals[i].Count,
-					Missed:   proposals[i+1].Count,
-				})
-				i++
-			} else if proposals[i].Status == 1 {
-				dashboardPageData.DailyProposalCount = append(dashboardPageData.DailyProposalCount, types.DailyProposalCount{
-					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
-					Proposed: proposals[i].Count,
-					Missed:   0,
-				})
-			} else if proposals[i].Status == 2 {
-				dashboardPageData.DailyProposalCount = append(dashboardPageData.DailyProposalCount, types.DailyProposalCount{
-					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
-					Proposed: 0,
-					Missed:   proposals[i].Count,
-				})
-			} else {
-				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
-			}
-		}
-	}
-
-	var balanceHistory []*types.ValidatorBalanceHistory
-	err = db.DB.Select(&balanceHistory, "SELECT epoch, SUM(balance) as balance FROM validator_balances WHERE validatorindex = ANY($1) GROUP BY epoch ORDER BY epoch", filter)
-	if err != nil {
-		logger.Printf("Error retrieving validator balance history: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-
-	dashboardPageData.BalanceHistoryChartData = make([][]float64, len(balanceHistory))
-	for i, balance := range balanceHistory {
-		dashboardPageData.BalanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000}
-	}
-
-	var effectiveBalanceHistory []*types.DashboardValidatorBalanceHistory
-	err = db.DB.Select(&effectiveBalanceHistory, "SELECT epoch, SUM(effectivebalance) as balance, COUNT(*) as validatorcount FROM validator_set WHERE validatorindex = ANY($1) GROUP BY epoch ORDER BY epoch", filter)
-	if err != nil {
-		logger.Printf("Error retrieving validator effective balance history: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-
-	dashboardPageData.EffectiveBalanceHistoryChartData = make([][]float64, len(effectiveBalanceHistory))
-	for i, balance := range effectiveBalanceHistory {
-		dashboardPageData.EffectiveBalanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000, balance.ValidatorCount}
-	}
 
 	data := &types.PageData{
 		Meta: &types.Meta{
@@ -185,9 +63,7 @@ func Dashboard(w http.ResponseWriter, r *http.Request) {
 		Data:               nil,
 	}
 
-	data.Data = dashboardPageData
-
-	err = dashboardTemplate.ExecuteTemplate(w, "layout", data)
+	err := dashboardTemplate.ExecuteTemplate(w, "layout", data)
 	if err != nil {
 		logger.Fatalf("Error executing template for %v route: %v", r.URL.String(), err)
 	}
@@ -195,6 +71,10 @@ func Dashboard(w http.ResponseWriter, r *http.Request) {
 
 func DashboardDataBalance(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	var group sync.WaitGroup
+
+	group.Add(2)
 
 	q := r.URL.Query()
 
@@ -206,31 +86,54 @@ func DashboardDataBalance(w http.ResponseWriter, r *http.Request) {
 	}
 	filter := pq.Array(filterArr)
 
-	var balanceHistory []*types.ValidatorBalanceHistory
-	err = db.DB.Select(&balanceHistory, "SELECT epoch, SUM(balance) as balance FROM validator_balances WHERE validatorindex = ANY($1) GROUP BY epoch ORDER BY epoch", filter)
-	if err != nil {
-		logger.Printf("Error retrieving validator balance history: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
+	balanceHistoryChartData := make([][]float64, 16800)
+	balanceHistory := []*types.ValidatorBalanceHistory{}
+	effectiveBalanceHistory := []*types.DashboardValidatorBalanceHistory{}
+	effectiveBalanceHistoryChartData := make([][]float64, 16800)
 
-	balanceHistoryChartData := make([][]float64, len(balanceHistory))
-	for i, balance := range balanceHistory {
-		balanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000}
-	}
+	go func() {
+		defer group.Done()
+		query := `SELECT validator_balances.epoch, SUM(validator_balances.balance) as balance
+		FROM validator_balances
+		LEFT JOIN validator_set ON validator_set.epoch = validator_balances.epoch
+		AND validator_set.validatorindex = validator_balances.validatorindex
+		WHERE validator_balances.validatorindex = ANY($1)
+		AND validator_set.epoch > validator_set.activationepoch
+		AND validator_set.epoch < validator_set.exitepoch
+		GROUP BY validator_balances.epoch
+		ORDER BY validator_balances.epoch desc limit 16800`
+		// query := `SELECT epoch, SUM(balance) as balance FROM validator_balances WHERE validatorindex = ANY($1) GROUP BY epoch ORDER BY epoch`
 
-	var effectiveBalanceHistory []*types.DashboardValidatorBalanceHistory
-	err = db.DB.Select(&effectiveBalanceHistory, "SELECT epoch, SUM(effectivebalance) as balance, COUNT(*) as validatorcount FROM validator_set WHERE validatorindex = ANY($1) GROUP BY epoch ORDER BY epoch", filter)
-	if err != nil {
-		logger.Printf("Error retrieving validator effective balance history: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
+		err := db.DB.Select(&balanceHistory, query, filter)
+		if err != nil {
+			logger.Printf("Error retrieving validator balance history: %v", err)
+			http.Error(w, "Internal server error", 503)
+			return
+		}
 
-	effectiveBalanceHistoryChartData := make([][]float64, len(effectiveBalanceHistory))
-	for i, balance := range effectiveBalanceHistory {
-		effectiveBalanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000, balance.ValidatorCount}
-	}
+		balanceHistoryChartData = make([][]float64, len(balanceHistory))
+		for i, balance := range balanceHistory {
+			balanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000}
+		}
+
+	}()
+
+	go func() {
+		defer group.Done()
+		err := db.DB.Select(&effectiveBalanceHistory, "SELECT epoch, SUM(effectivebalance) as balance, COUNT(*) as validatorcount FROM validator_set WHERE validatorindex = ANY($1) AND epoch > activationepoch AND epoch < exitepoch GROUP BY epoch ORDER BY epoch desc limit 16800", filter)
+		if err != nil {
+			logger.Printf("Error retrieving validator effective balance history: %v", err)
+			http.Error(w, "Internal server error", 503)
+			return
+		}
+
+		effectiveBalanceHistoryChartData = make([][]float64, len(effectiveBalanceHistory))
+		for i, balance := range effectiveBalanceHistory {
+			effectiveBalanceHistoryChartData[i] = []float64{float64(utils.EpochToTime(balance.Epoch).Unix() * 1000), float64(balance.Balance) / 1000000000, balance.ValidatorCount}
+		}
+	}()
+
+	group.Wait()
 
 	type dataType struct {
 		BalanceHistory          [][]float64 `json:"balanceHistory"`
@@ -282,15 +185,24 @@ func DashboardDataProposals(w http.ResponseWriter, r *http.Request) {
 					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
 					Proposed: proposals[i].Count,
 					Missed:   0,
+					Orphaned: 0,
 				})
 			} else if proposals[i].Status == 2 {
 				dailyProposalCount = append(dailyProposalCount, types.DailyProposalCount{
 					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
 					Proposed: 0,
 					Missed:   proposals[i].Count,
+					Orphaned: 0,
+				})
+			} else if proposals[i].Status == 3 {
+				dailyProposalCount = append(dailyProposalCount, types.DailyProposalCount{
+					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
+					Proposed: 0,
+					Missed:   0,
+					Orphaned: proposals[i].Count,
 				})
 			} else {
-				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
+				logger.Error("Error parsing Daily Proposed Blocks unkown status: %v", proposals[i].Status)
 			}
 		} else {
 			if proposals[i].Day == proposals[i+1].Day {
@@ -298,6 +210,7 @@ func DashboardDataProposals(w http.ResponseWriter, r *http.Request) {
 					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
 					Proposed: proposals[i].Count,
 					Missed:   proposals[i+1].Count,
+					Orphaned: proposals[i+1].Count,
 				})
 				i++
 			} else if proposals[i].Status == 1 {
@@ -305,15 +218,24 @@ func DashboardDataProposals(w http.ResponseWriter, r *http.Request) {
 					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
 					Proposed: proposals[i].Count,
 					Missed:   0,
+					Orphaned: 0,
 				})
 			} else if proposals[i].Status == 2 {
 				dailyProposalCount = append(dailyProposalCount, types.DailyProposalCount{
 					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
 					Proposed: 0,
 					Missed:   proposals[i].Count,
+					Orphaned: 0,
+				})
+			} else if proposals[i].Status == 3 {
+				dailyProposalCount = append(dailyProposalCount, types.DailyProposalCount{
+					Day:      utils.SlotToTime(proposals[i].Day * 7200).Unix(),
+					Proposed: 0,
+					Missed:   0,
+					Orphaned: proposals[i].Count,
 				})
 			} else {
-				logger.WithError(err).Error("Error parsing Daily Proposed Blocks unkown status")
+				logger.Error("Error parsing Daily Proposed Blocks unkown status: %v", proposals[i].Status)
 			}
 		}
 	}
@@ -355,15 +277,15 @@ func DashboardDataValidatorsPending(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", 503)
 		return
 	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Printf("Error converting datatables length parameter from string to int: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+	// length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+	// if err != nil {
+	// 	logger.Printf("Error converting datatables length parameter from string to int: %v", err)
+	// 	http.Error(w, "Internal server error", 503)
+	// 	return
+	// }
+	// if length > 100 {
+	// 	length = 100
+	// }
 
 	var totalCount uint64
 
@@ -395,9 +317,9 @@ func DashboardDataValidatorsPending(w http.ResponseWriter, r *http.Request) {
 		WHERE validator_set.epoch = $1 
 			AND validator_set.epoch < activationepoch
 			AND encode(validators.pubkey::bytea, 'hex') LIKE $2
-			AND validator_set.validatorindex = ANY($5)
+			AND validator_set.validatorindex = ANY($4)
 		ORDER BY activationepoch DESC 
-		LIMIT $3 OFFSET $4`, services.LatestEpoch(), "%"+search+"%", length, start, filter)
+		LIMIT 100 OFFSET $3`, services.LatestEpoch(), "%"+search+"%", start, filter)
 
 	if err != nil {
 		logger.Printf("Error retrieving pending validator data: %v", err)
@@ -462,15 +384,15 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", 503)
 		return
 	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Printf("Error converting datatables length parameter from string to int: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+	// length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+	// if err != nil {
+	// 	logger.Printf("Error converting datatables length parameter from string to int: %v", err)
+	// 	http.Error(w, "Internal server error", 503)
+	// 	return
+	// }
+	// if length > 100 {
+	// 	length = 100
+	// }
 
 	var totalCount uint64
 
@@ -480,6 +402,9 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", 503)
 		return
 	}
+
+	// attestation_assignments.status
+	//
 
 	var validators []*types.ValidatorsPageDataValidators
 	err = db.DB.Select(&validators, `SELECT 
@@ -492,7 +417,9 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 			validator_set.activationeligibilityepoch, 
 			validator_set.activationepoch, 
 			validator_set.exitepoch,
-			validator_balances.balance
+			validator_balances.balance,
+			(select max(epoch) from attestation_assignments where validator_set.validatorindex = attestation_assignments.validatorindex and status = 1) as lastattested,
+			(select max(epoch) from proposal_assignments where validator_set.validatorindex = proposal_assignments.validatorindex and status = 1) as lastproposed
 		FROM validator_set
 		LEFT JOIN validator_balances 
 			ON validator_set.epoch = validator_balances.epoch
@@ -503,9 +430,9 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 			AND validator_set.epoch > activationepoch 
 			AND validator_set.epoch < exitepoch 
 			AND encode(validators.pubkey::bytea, 'hex') LIKE $2
-			AND validator_set.validatorindex = ANY($5)
+			AND validator_set.validatorindex = ANY($4)
 		ORDER BY activationepoch DESC 
-		LIMIT $3 OFFSET $4`, services.LatestEpoch(), "%"+search+"%", length, start, filter)
+		LIMIT 100 OFFSET $3`, services.LatestEpoch(), "%"+search+"%", start, filter)
 
 	if err != nil {
 		logger.Printf("Error retrieving active validators data: %v", err)
@@ -515,6 +442,14 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 
 	tableData := make([][]interface{}, len(validators))
 	for i, v := range validators {
+		if v.LastProposed == nil {
+			genesis := uint64(utils.Config.Chain.GenesisTimestamp)
+			v.LastProposed = &genesis
+		}
+		if v.LastAttested == nil {
+			genesis := uint64(utils.Config.Chain.GenesisTimestamp)
+			v.LastAttested = &genesis
+		}
 		tableData[i] = []interface{}{
 			fmt.Sprintf("%x", v.PublicKey),
 			fmt.Sprintf("%v", v.ValidatorIndex),
@@ -523,6 +458,8 @@ func DashboardDataValidatorsActive(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("%v", v.Slashed),
 			fmt.Sprintf("%v", v.ActivationEligibilityEpoch),
 			fmt.Sprintf("%v", v.ActivationEpoch),
+			utils.EpochToTime(*v.LastAttested).Unix(),
+			utils.EpochToTime(*v.LastProposed).Unix(),
 		}
 	}
 
@@ -570,15 +507,15 @@ func DashboardDataValidatorsEjected(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", 503)
 		return
 	}
-	length, err := strconv.ParseUint(q.Get("length"), 10, 64)
-	if err != nil {
-		logger.Printf("Error converting datatables length parameter from string to int: %v", err)
-		http.Error(w, "Internal server error", 503)
-		return
-	}
-	if length > 100 {
-		length = 100
-	}
+	// length, err := strconv.ParseUint(q.Get("length"), 10, 64)
+	// if err != nil {
+	// 	logger.Printf("Error converting datatables length parameter from string to int: %v", err)
+	// 	http.Error(w, "Internal server error", 503)
+	// 	return
+	// }
+	// if length > 100 {
+	// 	length = 100
+	// }
 
 	var totalCount uint64
 
@@ -610,9 +547,9 @@ func DashboardDataValidatorsEjected(w http.ResponseWriter, r *http.Request) {
 		WHERE validator_set.epoch = $1 
 			AND validator_set.epoch > exitepoch
 			AND encode(validators.pubkey::bytea, 'hex') LIKE $2
-			AND validator_set.validatorindex = ANY($5)
+			AND validator_set.validatorindex = ANY($4)
 		ORDER BY activationepoch DESC 
-		LIMIT $3 OFFSET $4`, services.LatestEpoch(), "%"+search+"%", length, start, filter)
+		LIMIT 100 OFFSET $3`, services.LatestEpoch(), "%"+search+"%", start, filter)
 
 	if err != nil {
 		logger.Printf("Error retrieving ejected validators data: %v", err)
