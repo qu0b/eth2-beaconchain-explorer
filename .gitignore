@@ -1,7 +1,11 @@
 .idea/
 cmd/playground
+cmd/monitor
 modd.conf
 bin/
 docker/
 templates/imprint.html
 config.yml
+config-lighthouse.yml
+.*swp
+bootstrap/node_modules
