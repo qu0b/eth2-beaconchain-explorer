@@ -1,0 +1,58 @@
+<number>: int @index(int) .
+<epoch>: uid .
+<next>: uid .
+<previous>: uid .
+<slots>: [uid] @count .
+<status>: int .
+<attestations>: [uid] @count .
+<root_hash>: string @index(exact) .
+<proposed_by>: uid .
+<deposit>: uid .
+<exit>: uid .
+<slashing>: uid .
+<amount>: uid .
+<validators>: [uid] .
+<index>: int .
+<effective_balance>: int .
+<current_balance>: int .
+
+
+type Epoch {
+  number
+  status
+  next
+  previous
+  slots
+}
+
+type Slot {
+  number
+  proposed_by
+  status
+  root_hash
+  votes
+}
+
+Comitee {
+  validators
+}
+
+Validator {
+  index
+  effective_balance
+  current_balance
+  status
+  slashed
+}
+
+type Deposit {
+
+}
+
+type Exit {
+
+}
+
+type Slashing {
+
+}

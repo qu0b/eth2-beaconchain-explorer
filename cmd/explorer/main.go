@@ -82,6 +82,19 @@ func main() {
 		go exporter.Start(rpcClient)
 	}
 
+	if cfg.Dgraph.Enabled {
+		var rpcClient rpc.Client
+
+		db.Dclient = db.DgraphClient()
+		if utils.Config.Indexer.Node.Type == "prysm" {
+			rpcClient, err = rpc.NewPrysmClient(cfg.Indexer.Node.Host + ":" + cfg.Indexer.Node.Port)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		exporter.StartGraphExport(rpcClient)
+	}
+
 	if cfg.Frontend.Enabled {
 		services.Init() // Init frontend services
 

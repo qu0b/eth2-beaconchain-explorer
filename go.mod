@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
+	github.com/dgraph-io/dgo/v2 v2.1.0
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.13.1
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -26,7 +27,6 @@ require (
 	github.com/zesik/proxyaddr v0.0.0-20161218060608-ec32c535184d
 	golang.org/x/net v0.0.0-20191204025024-5ee1b9f4859a // indirect
 	golang.org/x/sys v0.0.0-20191204072324-ce4227a45e2e // indirect
-	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/genproto v0.0.0-20191203220235-3fa9dbf08042 // indirect
 	google.golang.org/grpc v1.25.1
 	gopkg.in/yaml.v2 v2.2.7

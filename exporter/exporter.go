@@ -408,3 +408,7 @@ func updateEpochStatus(client rpc.Client, startEpoch, endEpoch uint64) error {
 	}
 	return nil
 }
+
+func StartGraphExport(client rpc.Client) error {
+	return nil
+}

@@ -36,4 +36,7 @@ type Config struct {
 			Host string `yaml:"host", envconfig:"FRONTEND_SERVER_HOST"`
 		} `yaml:"server"`
 	} `yaml:"frontend"`
+	Dgraph struct {
+		Enabled bool `yaml:"enabled", envconfig:"FRONTEND_ENABLED"`
+	} `yaml:"dgraph"`
 }
